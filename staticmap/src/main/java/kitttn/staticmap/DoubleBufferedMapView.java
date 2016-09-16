@@ -41,7 +41,7 @@ public class DoubleBufferedMapView extends RelativeLayout {
     private int currentZoomPointer = 0;
 
     public DoubleBufferedMapView(Context context) {
-        super(context, null);
+        this(context, null);
     }
 
     public DoubleBufferedMapView(Context context, AttributeSet attrs) {
