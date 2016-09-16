@@ -1,1 +1,2 @@
-include ':app', ':staticmap'
+rootProject.name = "kitttn.staticmap"
+include ':staticmap'
