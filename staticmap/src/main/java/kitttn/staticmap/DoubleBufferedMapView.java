@@ -92,7 +92,7 @@ public class DoubleBufferedMapView extends RelativeLayout {
 
     private void setRandomLocationOffset(int meters) {
         // at first, let's check longitude
-        if (lng <= 0.0000001)
+        if (Math.abs(lng) <= 0.0000001)
             throw new Error("Need to set location first!");
         // okay, now calculate one degree in your longitude
         double ourDegree = ONE_DEGREE_IN_M * Math.cos(lng * Math.PI / 180);
