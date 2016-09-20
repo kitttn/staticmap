@@ -4,12 +4,12 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Matrix;
 import android.graphics.drawable.BitmapDrawable;
+import android.support.percent.PercentRelativeLayout;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.ImageView;
-import android.widget.RelativeLayout;
 
 import com.squareup.picasso.Callback;
 import com.squareup.picasso.Picasso;
@@ -21,8 +21,9 @@ import java.util.List;
  * @author kitttn
  */
 
-public class DoubleBufferedMapView extends RelativeLayout {
+public class DoubleBufferedMapView extends PercentRelativeLayout {
     private static final double ONE_DEGREE_IN_M = 111320;
+    private static final double MAX_ZOOM = 21.0;
     private static final String TAG = "DoubleBufferedMapView";
     private static final String MAPS_KEY = "AIzaSyBXpnndL6qbx9Ii-Dc73gLGs5icLQBjQow";
     private static final String MAPS_URL = "http://maps.google.com/maps/api/staticmap?center=%s,%s"
@@ -35,10 +36,13 @@ public class DoubleBufferedMapView extends RelativeLayout {
     private Context context;
     private ImageView primaryBuffer;
     private ImageView secondaryBuffer;
+    private ImageView overlay;
     private Bitmap lastLoadedBitmap = null;
 
     private List<Integer> zoomLevels = new ArrayList<>();
+    private double multiplier = 0;
     private int currentZoomPointer = 0;
+    private int offset = 0;
 
     public DoubleBufferedMapView(Context context) {
         this(context, null);
@@ -53,6 +57,7 @@ public class DoubleBufferedMapView extends RelativeLayout {
 
         primaryBuffer = (ImageView) getChildAt(1);
         secondaryBuffer = (ImageView) getChildAt(0);
+        overlay = (ImageView) getChildAt(2);
 
         init();
     }
@@ -60,11 +65,15 @@ public class DoubleBufferedMapView extends RelativeLayout {
     public void setZoomLevels(int... levels) {
         zoomLevels.clear();
         for (int level : levels) zoomLevels.add(level);
+        if (levels.length > 0) {
+            multiplier = .6 / (levels[levels.length - 1] - levels[0]);
+        }
     }
 
     public void setLatLngOffset(double lat, double lng, int offsetInMeters) {
         this.lat = lat;
         this.lng = lng;
+        this.offset = offsetInMeters;
         setRandomLocationOffset(offsetInMeters);
     }
 
@@ -78,6 +87,7 @@ public class DoubleBufferedMapView extends RelativeLayout {
                 Bitmap bmp = ((BitmapDrawable) secondaryBuffer.getDrawable()).getBitmap();
                 lastLoadedBitmap = bmp;
                 primaryBuffer.setImageBitmap(bmp);
+                calculatePercent(zoomLevels.get(currentZoomPointer));
             }
         });
     }
@@ -106,7 +116,8 @@ public class DoubleBufferedMapView extends RelativeLayout {
             throw new Error("Zoom levels not set!");
 
         currentZoomPointer = (currentZoomPointer + 1) % zoomLevels.size();
-        return zoomLevels.get(currentZoomPointer);
+        int lvl = zoomLevels.get(currentZoomPointer);
+        return lvl;
     }
 
     private Bitmap getResizedBitmap(Bitmap bm, float scale) {
@@ -121,5 +132,15 @@ public class DoubleBufferedMapView extends RelativeLayout {
         // RECREATE THE NEW BITMAP
 
         return Bitmap.createBitmap(bm, 0, 0, width, height, matrix, false);
+    }
+
+    private void calculatePercent(int currentZoom) {
+        float percent = (float) (.1 + multiplier * (currentZoom - zoomLevels.get(0)));
+        Log.i(TAG, "calculatePercent: percent: " + percent * 100);
+
+        PercentRelativeLayout.LayoutParams params = (LayoutParams) overlay.getLayoutParams();
+        params.getPercentLayoutInfo().heightPercent = percent;
+        params.getPercentLayoutInfo().widthPercent = percent;
+        overlay.setLayoutParams(params);
     }
 }
