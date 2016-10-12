@@ -10,13 +10,14 @@
         android:layout_height="match_parent"/>
 
     <ImageView
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:scaleType="center"/>
-
-    <ImageView
         android:layout_centerInParent="true"
         android:background="@drawable/circle"
         app:layout_heightPercent="70%"
         app:layout_widthPercent="70%"/>
+
+    <ProgressBar
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:layout_centerInParent="true"
+        android:visibility="gone"/>
 </merge>

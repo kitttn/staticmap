@@ -2,20 +2,25 @@ package kitttn.staticmap;
 
 import android.content.Context;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Matrix;
-import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
 import android.support.percent.PercentRelativeLayout;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.ImageView;
+import android.widget.ProgressBar;
 
-import com.squareup.picasso.Callback;
 import com.squareup.picasso.Picasso;
+import com.squareup.picasso.Target;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 
 /**
  * @author kitttn
@@ -28,21 +33,22 @@ public class DoubleBufferedMapView extends PercentRelativeLayout {
     private static final String MAPS_KEY = "AIzaSyBXpnndL6qbx9Ii-Dc73gLGs5icLQBjQow";
     private static final String MAPS_URL = "http://maps.google.com/maps/api/staticmap?center=%s,%s"
             + "&scale=2&zoom=%s&size=640x640&sensor=false&key=" + MAPS_KEY;
-
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
     private double lat = 0;
     private double lng = 0;
     private long triggerTime = 0;
     private int clicks = 0;
     private Context context;
     private ImageView primaryBuffer;
-    private ImageView secondaryBuffer;
     private ImageView overlay;
-    private Bitmap lastLoadedBitmap = null;
+    private ProgressBar progress;
+    private MyTarget target = new MyTarget();
 
     private List<Integer> zoomLevels = new ArrayList<>();
     private double multiplier = 0;
     private int currentZoomPointer = 0;
     private int offset = 0;
+    private Random random;
 
     public DoubleBufferedMapView(Context context) {
         this(context, null);
@@ -55,9 +61,9 @@ public class DoubleBufferedMapView extends PercentRelativeLayout {
         LayoutInflater inflater = (LayoutInflater) context.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
         inflater.inflate(R.layout.layout, this, true);
 
-        primaryBuffer = (ImageView) getChildAt(1);
-        secondaryBuffer = (ImageView) getChildAt(0);
-        overlay = (ImageView) getChildAt(2);
+        primaryBuffer = (ImageView) getChildAt(0);
+        overlay = (ImageView) getChildAt(1);
+        progress = (ProgressBar) getChildAt(2);
 
         init();
     }
@@ -70,6 +76,10 @@ public class DoubleBufferedMapView extends PercentRelativeLayout {
         }
     }
 
+    public void setSeed(long seed) {
+        random = new Random(seed);
+    }
+
     public void setLatLngOffset(double lat, double lng, int offsetInMeters) {
         this.lat = lat;
         this.lng = lng;
@@ -79,17 +89,10 @@ public class DoubleBufferedMapView extends PercentRelativeLayout {
 
     public void loadMap() {
         String url = String.format(MAPS_URL, lat, lng, getNextZoomLevel());
-        if (lastLoadedBitmap != null)
-            primaryBuffer.setImageBitmap(getResizedBitmap(lastLoadedBitmap, 1.5f));
-
-        Picasso.with(context).load(url).into(secondaryBuffer, new Callback.EmptyCallback() {
-            @Override public void onSuccess() {
-                Bitmap bmp = ((BitmapDrawable) secondaryBuffer.getDrawable()).getBitmap();
-                lastLoadedBitmap = bmp;
-                primaryBuffer.setImageBitmap(bmp);
-                calculatePercent(zoomLevels.get(currentZoomPointer));
-            }
-        });
+        progress.setVisibility(VISIBLE);
+        Picasso.with(context)
+                .load(url)
+                .into(target);
     }
 
     private void init() {
@@ -101,6 +104,8 @@ public class DoubleBufferedMapView extends PercentRelativeLayout {
     }
 
     private void setRandomLocationOffset(int meters) {
+        if (random == null)
+            random = new Random();
         // at first, let's check longitude
         if (Math.abs(lng) <= 0.0000001)
             throw new Error("Need to set location first!");
@@ -108,7 +113,7 @@ public class DoubleBufferedMapView extends PercentRelativeLayout {
         double ourDegree = ONE_DEGREE_IN_M * Math.cos(lng * Math.PI / 180);
         // good, going forward, calculate degrees based on radius you provided
         double offset = meters * 2.0 / ourDegree;
-        lng += 2 * Math.random() * offset - offset;
+        lng += 2 * random.nextFloat() * offset - offset;
     }
 
     private int getNextZoomLevel() {
@@ -131,7 +136,9 @@ public class DoubleBufferedMapView extends PercentRelativeLayout {
         matrix.postScale(scale, scale);
         // RECREATE THE NEW BITMAP
 
-        return Bitmap.createBitmap(bm, 0, 0, width, height, matrix, false);
+        Bitmap bitmap = Bitmap.createBitmap(bm, 0, 0, width, height, matrix, false);
+        bm.recycle();
+        return bitmap;
     }
 
     private void calculatePercent(int currentZoom) {
@@ -142,5 +149,29 @@ public class DoubleBufferedMapView extends PercentRelativeLayout {
         params.getPercentLayoutInfo().heightPercent = percent;
         params.getPercentLayoutInfo().widthPercent = percent;
         overlay.setLayoutParams(params);
+    }
+
+    private Bitmap transform(Bitmap source) {
+        source.compress(Bitmap.CompressFormat.JPEG, 80, out);
+        //source.recycle();
+        Bitmap result = BitmapFactory.decodeStream(new ByteArrayInputStream(out.toByteArray()));
+        out.reset();
+        return result;
+    }
+
+    private class MyTarget implements Target {
+        @Override public void onBitmapLoaded(Bitmap bitmap, Picasso.LoadedFrom from) {
+            primaryBuffer.setImageBitmap(transform(bitmap));
+            progress.setVisibility(GONE);
+            calculatePercent(zoomLevels.get(currentZoomPointer));
+        }
+
+        @Override public void onBitmapFailed(Drawable errorDrawable) {
+
+        }
+
+        @Override public void onPrepareLoad(Drawable placeHolderDrawable) {
+
+        }
     }
 }
